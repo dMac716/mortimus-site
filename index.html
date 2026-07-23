@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mortimus — Honest Wildfire Smoke Detection</title>
+<meta name="description" content="Mortimus — honest edge-AI wildfire smoke detection for Sage/Waggle camera nodes. A cheap-first cascade that runs on the node, escalates rarely, and publishes its false positives as carefully as its detections.">
+<meta name="color-scheme" content="dark light">
+<meta property="og:title" content="Mortimus — Honest Wildfire Smoke Detection">
+<meta property="og:description" content="Edge-AI wildfire smoke detection that reports its own false positives as carefully as its detections. Move the work, not the data.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Ctext%20y='.9em'%20font-size='90'%3E%F0%9F%94%A5%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    --ground: #10131a;
+    --ground-2: #0b0e14;
+    --panel: #171c26;
+    --ink: #e9e6df;
+    --muted: #8b92a0;
+    --faint: #5f6675;
+    --ember: #ec8a3c;
+    --ember-soft: rgba(236, 138, 60, 0.14);
+    --verify: #63b3a6;
+    --hairline: rgba(233, 230, 223, 0.10);
+    --hairline-2: rgba(233, 230, 223, 0.06);
+    --shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 18px 40px -24px rgba(0,0,0,0.8);
+
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Menlo", "Consolas", monospace;
+
+    --measure: 63ch;
+    --col: min(66rem, 92vw);
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --ground: #f6f3ec;
+      --ground-2: #efeae0;
+      --panel: #fbf9f4;
+      --ink: #1a1d24;
+      --muted: #5b616c;
+      --faint: #8b8f99;
+      --ember: #c56a1e;
+      --ember-soft: rgba(197, 106, 30, 0.10);
+      --verify: #2f8375;
+      --hairline: rgba(26, 29, 36, 0.12);
+      --hairline-2: rgba(26, 29, 36, 0.07);
+      --shadow: 0 1px 0 rgba(255,255,255,0.6) inset, 0 18px 40px -28px rgba(60,40,20,0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #10131a; --ground-2: #0b0e14; --panel: #171c26;
+    --ink: #e9e6df; --muted: #8b92a0; --faint: #5f6675;
+    --ember: #ec8a3c; --ember-soft: rgba(236,138,60,0.14); --verify: #63b3a6;
+    --hairline: rgba(233,230,223,0.10); --hairline-2: rgba(233,230,223,0.06);
+    --shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 18px 40px -24px rgba(0,0,0,0.8);
+  }
+  :root[data-theme="light"] {
+    --ground: #f6f3ec; --ground-2: #efeae0; --panel: #fbf9f4;
+    --ink: #1a1d24; --muted: #5b616c; --faint: #8b8f99;
+    --ember: #c56a1e; --ember-soft: rgba(197,106,30,0.10); --verify: #2f8375;
+    --hairline: rgba(26,29,36,0.12); --hairline-2: rgba(26,29,36,0.07);
+    --shadow: 0 1px 0 rgba(255,255,255,0.6) inset, 0 18px 40px -28px rgba(60,40,20,0.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(120% 80% at 50% -10%, var(--ember-soft), transparent 55%),
+      linear-gradient(180deg, var(--ground) 0%, var(--ground-2) 100%);
+    background-attachment: fixed;
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: clamp(16px, 1rem + 0.15vw, 18px);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  .wrap { width: var(--col); margin-inline: auto; }
+
+  /* ---- shared type ---- */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 1.1rem;
+    display: flex; align-items: center; gap: 0.7rem;
+  }
+  .eyebrow::before {
+    content: ""; width: 1.6rem; height: 1px; background: var(--ember); opacity: 0.9;
+  }
+  h1, h2, h3 { text-wrap: balance; letter-spacing: -0.02em; font-weight: 800; margin: 0; }
+  p { margin: 0; max-width: var(--measure); }
+  a { color: var(--ink); text-decoration-color: var(--faint); text-underline-offset: 3px; }
+  a:hover { text-decoration-color: var(--ember); }
+  :focus-visible { outline: 2px solid var(--ember); outline-offset: 3px; border-radius: 2px; }
+
+  /* ---- horizon divider (the thing the cameras watch) ---- */
+  .horizon {
+    height: 1px; width: 100%;
+    background: linear-gradient(90deg, transparent, var(--hairline) 12%, var(--hairline) 88%, transparent);
+    position: relative;
+  }
+  .horizon::after {
+    content: ""; position: absolute; left: 50%; top: -2px; width: 5px; height: 5px;
+    transform: translateX(-50%) rotate(45deg);
+    background: var(--ember); box-shadow: 0 0 12px 1px var(--ember-soft);
+  }
+
+  /* ---- hero ---- */
+  header.hero { padding: clamp(4rem, 12vh, 8.5rem) 0 clamp(3rem, 7vh, 5rem); }
+  .brand {
+    font-size: clamp(3.4rem, 10vw, 6.4rem);
+    line-height: 0.94;
+    background: linear-gradient(180deg, var(--ink), color-mix(in oklab, var(--ink) 74%, var(--ember)));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .tagline {
+    font-size: clamp(1.25rem, 1rem + 1.4vw, 1.9rem);
+    font-weight: 650; letter-spacing: -0.015em; margin-top: 1.1rem; color: var(--ink);
+    max-width: 22ch;
+  }
+  .lede {
+    margin-top: 1.6rem; color: var(--muted); font-size: 1.075rem; max-width: 54ch;
+  }
+  .lede b { color: var(--ink); font-weight: 650; }
+  .hero-meta {
+    margin-top: 2.4rem; display: flex; flex-wrap: wrap; gap: 1.4rem 2rem; align-items: center;
+    font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.04em; color: var(--faint);
+  }
+  .hero-meta .dot { color: var(--ember); }
+
+  /* ---- section frame ---- */
+  section { padding: clamp(3rem, 8vh, 5.5rem) 0; }
+  .kicker {
+    font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--ember); margin-bottom: 1rem;
+  }
+  h2.sec { font-size: clamp(1.7rem, 1.2rem + 2vw, 2.7rem); line-height: 1.05; max-width: 18ch; }
+  .sec-body { margin-top: 1.5rem; color: var(--muted); display: grid; gap: 1.1rem; }
+  .sec-body b { color: var(--ink); font-weight: 620; }
+
+  /* ---- the "why it fails" figure row ---- */
+  .confounds {
+    margin-top: 2rem; display: flex; flex-wrap: wrap; gap: 0.55rem;
+    font-family: var(--mono); font-size: 0.8rem;
+  }
+  .confounds span {
+    padding: 0.32rem 0.7rem; border: 1px solid var(--hairline); border-radius: 999px;
+    color: var(--muted); background: var(--hairline-2);
+  }
+  .confounds span::before { content: "≈ "; color: var(--ember); }
+
+  /* ---- cascade ---- */
+  .cascade { margin-top: 2.2rem; display: grid; gap: 0; counter-reset: step; }
+  .step {
+    display: grid; grid-template-columns: 2.4rem 1fr; gap: 1rem 1.1rem;
+    padding: 1.15rem 0; border-top: 1px solid var(--hairline-2); align-items: baseline;
+  }
+  .step:last-child { border-bottom: 1px solid var(--hairline-2); }
+  .step .n {
+    font-family: var(--mono); font-size: 0.85rem; color: var(--ember);
+    font-variant-numeric: tabular-nums;
+  }
+  .step h3 { font-size: 1.06rem; font-weight: 680; letter-spacing: -0.01em; }
+  .step p { color: var(--muted); font-size: 0.96rem; margin-top: 0.35rem; }
+  .step .cost { font-family: var(--mono); font-size: 0.72rem; color: var(--faint); letter-spacing: 0.05em; }
+
+  /* ---- measured readouts ---- */
+  .readout { margin-top: 2.2rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1px; background: var(--hairline-2); border: 1px solid var(--hairline-2); border-radius: 6px; overflow: hidden; }
+  .stat { background: var(--panel); padding: 1.5rem 1.4rem 1.35rem; box-shadow: var(--shadow); }
+  .stat .fig {
+    font-family: var(--mono); font-weight: 600; font-variant-numeric: tabular-nums;
+    font-size: clamp(1.9rem, 1.4rem + 1.6vw, 2.5rem); line-height: 1; letter-spacing: -0.02em;
+    color: var(--ink); display: flex; align-items: baseline; gap: 0.3rem;
+  }
+  .stat .fig .u { font-size: 0.9rem; color: var(--muted); letter-spacing: 0; }
+  .stat .fig.good { color: var(--verify); }
+  .stat .lab { margin-top: 0.7rem; font-size: 0.9rem; color: var(--ink); font-weight: 560; }
+  .stat .cap { margin-top: 0.3rem; font-size: 0.82rem; color: var(--faint); line-height: 1.5; }
+
+  /* ---- differentiators ---- */
+  .grid2 { margin-top: 2rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.4rem 2.2rem; }
+  .diff h3 { font-size: 1.02rem; font-weight: 680; margin-bottom: 0.5rem; }
+  .diff h3::before { content: ""; display: inline-block; width: 0.5rem; height: 0.5rem; margin-right: 0.55rem; background: var(--ember); transform: rotate(45deg); vertical-align: middle; }
+  .diff p { color: var(--muted); font-size: 0.94rem; }
+
+  /* ---- footer ---- */
+  footer { padding: clamp(3rem, 7vh, 5rem) 0 4rem; }
+  .ethos { font-size: clamp(1.35rem, 1rem + 1.8vw, 2.1rem); font-weight: 700; letter-spacing: -0.02em; max-width: 20ch; }
+  .ethos .em { color: var(--ember); }
+  .links { margin-top: 2.2rem; display: flex; flex-wrap: wrap; gap: 0.8rem; }
+  .links a {
+    font-family: var(--mono); font-size: 0.82rem; letter-spacing: 0.03em;
+    text-decoration: none; padding: 0.6rem 1rem; border: 1px solid var(--hairline);
+    border-radius: 4px; color: var(--ink); display: inline-flex; align-items: center; gap: 0.5rem;
+    transition: border-color 0.18s ease, transform 0.18s ease;
+  }
+  .links a:hover { border-color: var(--ember); transform: translateY(-1px); }
+  .links a .arw { color: var(--ember); }
+  .foot-meta {
+    margin-top: 2.6rem; padding-top: 1.4rem; border-top: 1px solid var(--hairline-2);
+    font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.05em; color: var(--faint);
+    display: flex; flex-wrap: wrap; gap: 0.4rem 1.4rem;
+  }
+
+  /* ---- load reveal ---- */
+  .rise { opacity: 0; transform: translateY(14px); }
+  .revealed .rise { opacity: 1; transform: none; transition: opacity 0.7s ease, transform 0.7s cubic-bezier(.2,.7,.2,1); }
+  .revealed .rise:nth-child(2) { transition-delay: 0.06s; }
+  .revealed .rise:nth-child(3) { transition-delay: 0.12s; }
+  .revealed .rise:nth-child(4) { transition-delay: 0.18s; }
+  @media (prefers-reduced-motion: reduce) {
+    .rise { opacity: 1; transform: none; }
+    .revealed .rise { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="hero">
+    <div class="wrap">
+      <p class="eyebrow rise">Sage Grande &middot; Summer of AI &middot; 2026</p>
+      <h1 class="brand rise">Mortimus</h1>
+      <p class="tagline rise">Honest edge-AI wildfire smoke detection.</p>
+      <p class="lede rise">A smoke detector that runs on the camera node itself &mdash; and reports its own <b>false positives</b> as carefully as its detections. Built on one rule: <b>move the work, not the data.</b></p>
+      <div class="hero-meta rise">
+        <span>pywaggle plugin</span>
+        <span class="dot">/</span>
+        <span>Sage / Waggle nodes</span>
+        <span class="dot">/</span>
+        <span>edge cascade &rarr; Beehive</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="wrap"><div class="horizon"></div></div>
+
+  <section>
+    <div class="wrap">
+      <p class="kicker">The problem</p>
+      <h2 class="sec">Off-the-shelf detectors look brilliant in the lab and collapse in the field.</h2>
+      <div class="sec-body">
+        <p>Every camera in the wild is full of things that <em>look</em> like smoke &mdash; fog banks, sunset cloud, marine layer, city glow, even a volcano. A model trained on clean datasets meets them all at once, and its field precision falls off a cliff.</p>
+        <p>We measured it. A well-known research detector scored a field precision of <b>0.127</b>. And on an independent <b>3.47-million-frame</b> archive of a per-frame vision-language detector's &ldquo;fire&rdquo; verdicts, we checked the largest bursts against county fire-department records: <b>zero of the 36 biggest</b> were real reported fires &mdash; they were per-camera artifacts, storms, and lava glow.</p>
+      </div>
+      <div class="confounds" aria-label="things that look like smoke but are not">
+        <span>fog</span><span>sunset cloud</span><span>marine layer</span><span>city glow</span><span>volcano</span><span>lens flare</span><span>dust</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap"><div class="horizon"></div></div>
+
+  <section>
+    <div class="wrap">
+      <p class="kicker">The approach</p>
+      <h2 class="sec">Cheap first, expensive last &mdash; and only small results leave the node.</h2>
+      <div class="sec-body">
+        <p>Almost every frame is boring, so almost every frame should cost almost nothing. Mortimus runs a cascade on the node and escalates only when the evidence earns it.</p>
+      </div>
+      <div class="cascade">
+        <div class="step"><span class="n">01</span><div><h3>Change gate</h3><p>A low-cost frame difference. A static scene stops here.</p><span class="cost">cost: negligible</span></div></div>
+        <div class="step"><span class="n">02</span><div><h3>CPU smoke heuristic</h3><p>Tiled contrast &amp; color analysis of what actually changed. A clear scene stops here.</p><span class="cost">cost: low</span></div></div>
+        <div class="step"><span class="n">03</span><div><h3>VLM escalation</h3><p>Only suspicious frames reach the node's vision-language model for a smoke / clear / unknown verdict. Fail-closed: missing evidence never becomes an alert.</p><span class="cost">cost: paid rarely, on purpose</span></div></div>
+        <div class="step"><span class="n">04</span><div><h3>Publish, don't stream</h3><p>Compact smoke scores go to Beehive &mdash; plus at most one snapshot per alert. Raw video never leaves the edge.</p><span class="cost">move the work, not the data</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap"><div class="horizon"></div></div>
+
+  <section>
+    <div class="wrap">
+      <p class="kicker">Why it's different</p>
+      <h2 class="sec">The framework is the deliverable.</h2>
+      <div class="grid2">
+        <div class="diff"><h3>False positives, published</h3><p>Every model is scored against human-labeled field imagery &mdash; and the errors are reported by condition (sunset, fog, night, glow), not hidden behind a single accuracy number.</p></div>
+        <div class="diff"><h3>No fire scores itself</h3><p>Evaluation is event-grouped and leave-one-incident-out. A fire never appears in both training and test, so the numbers mean what they say.</p></div>
+        <div class="diff"><h3>Every result is traceable</h3><p>Frame &rarr; dataset fingerprint &rarr; model &rarr; benchmark &rarr; deployed champion. A model that can't name what made it doesn't ship.</p></div>
+        <div class="diff"><h3>From frame to map</h3><p>Two or more cameras triangulate a plume onto the terrain. Fixing one systematic geometry error took localization from <b>6.84&nbsp;km</b> to <b>1.03&nbsp;km</b>.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap"><div class="horizon"></div></div>
+
+  <section>
+    <div class="wrap">
+      <p class="kicker">Measured, not asserted</p>
+      <h2 class="sec">Numbers we can trace to their inputs.</h2>
+      <div class="readout">
+        <div class="stat">
+          <div class="fig">0.127</div>
+          <div class="lab">Off-the-shelf field precision</div>
+          <div class="cap">A research detector, run on real field cameras. The gap between the lab and the world.</div>
+        </div>
+        <div class="stat">
+          <div class="fig">3.47<span class="u">M</span></div>
+          <div class="lab">Frames stress-tested</div>
+          <div class="cap">An independent archive of per-frame VLM &ldquo;fire&rdquo; verdicts we audited against ground truth.</div>
+        </div>
+        <div class="stat">
+          <div class="fig">0 <span class="u">/ 36</span></div>
+          <div class="lab">Top bursts that were real fires</div>
+          <div class="cap">Largest &ldquo;fire&rdquo; bursts corroborated against fire-department records. Off-the-shelf detection is FP-dominated.</div>
+        </div>
+        <div class="stat">
+          <div class="fig good">1.03<span class="u">km</span></div>
+          <div class="lab">Multi-camera fire localization</div>
+          <div class="cap">Down from 6.84&nbsp;km after correcting a systematic panorama-geometry error.</div>
+        </div>
+      </div>
+      <p class="sec-body" style="margin-top:1.6rem; font-size:0.86rem; color:var(--faint);">In-domain benchmarks (e.g. an F1 of 0.884 on a matched dataset) are reported as exactly that &mdash; in-domain, not a claim about the field. The distinction is the point.</p>
+    </div>
+  </section>
+
+  <div class="wrap"><div class="horizon"></div></div>
+
+  <footer>
+    <div class="wrap">
+      <p class="ethos rise">We publish our false positives <span class="em">as carefully</span> as our detections.</p>
+      <div class="links rise">
+        <a href="https://github.com/dMac716/Mortimus" target="_blank" rel="noopener">code on github <span class="arw">&rarr;</span></a>
+        <a href="https://sagecontinuum.org" target="_blank" rel="noopener">the sage project <span class="arw">&rarr;</span></a>
+      </div>
+      <div class="foot-meta rise">
+        <span>Mortimus</span>
+        <span>&middot; in development</span>
+        <span>&middot; Sage Grande: Summer of AI 2026</span>
+        <span>&middot; edge wildfire smoke detection</span>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<script>
+  (function () {
+    var reveal = function () { document.body.classList.add('revealed'); };
+    if (document.readyState === 'complete') reveal();
+    else window.addEventListener('load', reveal);
+    setTimeout(reveal, 400);
+  })();
+</script>
+</body>
+</html>
